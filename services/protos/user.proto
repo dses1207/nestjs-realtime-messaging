@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package user;
+
+service UserService {
+  rpc Register(RegisterRequest) returns (AuthResponse);
+  rpc Login(LoginRequest) returns (AuthResponse);
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc GetAllUsers(GetAllUsersRequest) returns (GetAllUsersResponse);
+  rpc GetAllUsernames(GetAllUsernamesRequest) returns (GetAllUsernamesResponse);
+  rpc GetUserByUsername(GetUserByUsernameRequest) returns (GetUserByUsernameResponse);
+  rpc GetUserById(GetUserByIdRequest) returns (GetUserByIdResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+}
+
+message RegisterRequest {
+  string email = 1;
+  string username = 2;
+  string password = 3;
+  optional string name = 4;
+}
+
+message LoginRequest {
+  string emailOrUsername = 1;
+  string password = 2;
+}
+
+message AuthResponse {
+  User user = 1;
+  string accessToken = 2;
+  string message = 3;
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  User user = 2;
+}
+
+message GetAllUsersRequest {}
+
+message GetAllUsersResponse {
+  repeated User users = 1;
+}
+
+message GetAllUsernamesRequest {}
+
+message GetAllUsernamesResponse {
+  repeated string usernames = 1;
+}
+
+message GetUserByUsernameRequest {
+  string username = 1;
+}
+
+message GetUserByUsernameResponse {
+  User user = 1;
+  bool found = 2;
+}
+
+message GetUserByIdRequest {
+  string userId = 1;
+}
+
+message GetUserByIdResponse {
+  User user = 1;
+  bool found = 2;
+}
+
+message UpdateUserRequest {
+  string userId = 1;
+  optional string email = 2;
+  optional string name = 3;
+  optional string username = 4;
+  optional string profilePicture = 5;
+  optional string status = 6;
+}
+
+message UpdateUserResponse {
+  User user = 1;
+  string message = 2;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string username = 4;
+  optional string department = 5;
+  string profilePicture = 6;
+  string status = 7;
+  string createdAt = 8;
+  string updatedAt = 9;
+}

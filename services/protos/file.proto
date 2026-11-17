@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+package file;
+
+service FileService {
+  // 統一預簽名 URL 檔案上傳 API
+  rpc RequestUpload(RequestUploadRequest) returns (RequestUploadResponse);
+  rpc ConfirmUpload(ConfirmUploadRequest) returns (ConfirmUploadResponse);
+  rpc GetSecureFile(GetSecureFileRequest) returns (GetSecureFileResponse);
+  rpc CheckFilePermission(CheckFilePermissionRequest) returns (CheckFilePermissionResponse);
+  rpc GetFileInfo(GetFileInfoRequest) returns (GetFileInfoResponse);
+  
+  // 新增：代理下載 API (支援權限檢查)
+  rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResponse);
+  
+  // 保留向後相容的舊 API
+  // 經由 API Gateway 直接上傳（multipart → gRPC bytes → MinIO），對應 POST /api/files/upload
+  rpc UploadSecureFile(UploadSecureFileRequest) returns (UploadSecureFileResponse);
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse);
+  rpc GetFileUrl(GetFileUrlRequest) returns (GetFileUrlResponse);
+}
+
+// 統一預簽名 URL 檔案上傳
+message RequestUploadRequest {
+  string filename = 1;
+  int64 fileSize = 2;
+  string contentType = 3;
+  string uploaderId = 4;
+  string conversationId = 5; // 可選
+  string messageId = 6; // 可選
+  string category = 7; // 可選: 'message', 'avatar', 'general'
+}
+
+message RequestUploadResponse {
+  bool success = 1;
+  string message = 2;
+  string fileId = 3; // 安全檔案 ID
+  string uploadUrl = 4; // MinIO 預簽名上傳 URL
+  string expiresAt = 5; // URL 過期時間 (ISO string)
+}
+
+message ConfirmUploadRequest {
+  string fileId = 1;
+  string uploaderId = 2; // 用於驗證權限
+}
+
+message ConfirmUploadResponse {
+  bool success = 1;
+  string message = 2;
+  string fileId = 3;
+  string fileUrl = 4; // API Gateway 代理 URL
+  int64 fileSize = 5; // 實際檔案大小
+  string contentType = 6;
+  // 原始名稱將由mongodb處理
+}
+
+// 安全檔案存取
+message GetSecureFileRequest {
+  string fileId = 1;
+  string userId = 2;
+}
+
+message GetSecureFileResponse {
+  bool success = 1;
+  string message = 2;
+  bytes fileData = 3;
+  string contentType = 4;
+  string filename = 5;
+  int64 fileSize = 6;
+}
+
+// 檔案權限檢查
+message CheckFilePermissionRequest {
+  string fileId = 1;
+  string userId = 2;
+}
+
+message CheckFilePermissionResponse {
+  bool success = 1;
+  bool hasPermission = 2;
+}
+
+// 檔案資訊查詢
+message GetFileInfoRequest {
+  string fileId = 1;
+}
+
+message GetFileInfoResponse {
+  bool success = 1;
+  string fileId = 2;
+  string originalName = 3;
+  string contentType = 4;
+  int64 fileSize = 5;
+  string uploaderId = 6;
+  string conversationId = 7;
+  string messageId = 8;
+  string category = 9;
+  string createdAt = 10;
+}
+
+// 代理下載檔案
+message DownloadFileRequest {
+  string fileId = 1;
+  string userId = 2;  // 請求用戶ID (用於權限檢查)
+  bool preview = 3;   // 可選：是否為預覽模式
+}
+
+message DownloadFileResponse {
+  bool success = 1;
+  string message = 2;
+  bytes fileData = 3;
+  string contentType = 4;
+  string filename = 5;
+  int64 fileSize = 6;
+  string disposition = 7;  // Content-Disposition header value
+}
+
+// 舊 API 保留向後相容
+message UploadSecureFileRequest {
+  string filename = 1;
+  bytes data = 2;
+  string contentType = 3;
+  string uploaderId = 4;
+  string conversationId = 5; // 可選
+  string messageId = 6; // 可選
+  string category = 7; // 可選，預設 general
+}
+
+message UploadSecureFileResponse {
+  bool success = 1;
+  string message = 2;
+  string fileId = 3;
+  string fileUrl = 4;
+  int64 fileSize = 5;
+  string contentType = 6;
+}
+
+message UploadFileRequest {
+  string filename = 1;
+  bytes data = 2;
+  string content_type = 3;
+  string context_prefix = 4;
+}
+
+message UploadFileResponse {
+  bool success = 1;
+  string message = 2;
+  string file_url = 3;
+}
+
+message GetFileUrlRequest {
+  string filename = 1;
+}
+
+message GetFileUrlResponse {
+  bool success = 1;
+  string message = 2;
+  string url = 3;
+}

@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package notification;
+
+service NotificationService {
+  rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse);
+  rpc SendSmartNotification (SendSmartNotificationRequest) returns (SendSmartNotificationResponse);
+  rpc RegisterDeviceToken (RegisterDeviceTokenRequest) returns (RegisterDeviceTokenResponse);
+  rpc UpdateNotificationSettings (UpdateNotificationSettingsRequest) returns (UpdateNotificationSettingsResponse);
+  rpc GetNotificationSettings (GetNotificationSettingsRequest) returns (GetNotificationSettingsResponse);
+  rpc RemoveDeviceToken (RemoveDeviceTokenRequest) returns (RemoveDeviceTokenResponse);
+}
+
+message SendNotificationRequest {
+  string userId = 1;
+  string type = 2;
+  string title = 3;
+  string body = 4;
+  map<string, string> data = 5;
+}
+
+message SendNotificationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SendSmartNotificationRequest {
+  string userId = 1;
+  string conversationId = 2;
+  string senderName = 3;
+  string content = 4;
+  string messageType = 5;
+  string type = 6;
+  optional string messageId = 7;
+  optional string conversationName = 8;
+  optional string fileName = 9;
+  optional string fileSize = 10;
+  optional string duration = 11;
+}
+
+message SendSmartNotificationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RegisterDeviceTokenRequest {
+  string userId = 1;
+  string token = 2;
+  string platform = 3;
+  string deviceId = 4;
+  string appVersion = 5;
+}
+
+message RegisterDeviceTokenResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UpdateNotificationSettingsRequest {
+  string userId = 1;
+  optional bool newMessage = 2;
+  optional bool groupInvite = 3;
+  optional bool groupMessage = 4;
+}
+
+message UpdateNotificationSettingsResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetNotificationSettingsRequest {
+  string userId = 1;
+}
+
+message NotificationSettings {
+  string userId = 1;
+  bool newMessage = 2;
+  bool groupInvite = 3;
+  bool groupMessage = 4;
+  string createdAt = 5;
+  string updatedAt = 6;
+}
+
+message GetNotificationSettingsResponse {
+  NotificationSettings settings = 1;
+}
+
+message RemoveDeviceTokenRequest {
+  string userId = 1;
+  string token = 2;
+}
+
+message RemoveDeviceTokenResponse {
+  bool success = 1;
+  string message = 2;
+}

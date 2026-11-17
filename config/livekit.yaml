@@ -1,0 +1,49 @@
+# LiveKit Server Configuration
+# Reference: https://docs.livekit.io/deploy/configuration
+
+port: 7880
+bind_addresses:
+  - "0.0.0.0"
+
+rtc:
+  # UDP port range for WebRTC
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+  tcp_port: 7881
+
+# API Keys - 用於 JWT 認證
+# 格式: key_name: key_secret
+# 注意:生產環境請更改這些值!
+keys:
+  test_api_key_change_me: test_api_secret_change_me
+
+# TURN Server configuration
+turn:
+  enabled: true
+  domain: coturn
+  tls_port: 5349
+  udp_port: 3478
+
+# Room settings
+room:
+  auto_create: true
+  empty_timeout: 300      # 5 分鐘無人自動關閉
+  max_participants: 100   # 最多 100 人
+  departure_timeout: 20   # 參與者離開後 20 秒清理
+
+# Logging
+logging:
+  level: info    # debug, info, warn, error
+  sample: true   # 採樣日誌
+
+# Redis (可選 - 用於多實例部署)
+# redis:
+#   address: redis:6379
+#   db: 0
+
+# Webhook (可選)
+# webhook:
+#   urls:
+#     - http://your-backend:3000/api/webhooks/livekit
+#   api_key: your-webhook-key

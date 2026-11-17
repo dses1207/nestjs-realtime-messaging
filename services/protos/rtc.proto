@@ -1,0 +1,252 @@
+syntax = "proto3";
+
+package rtc;
+
+// ========== RTC Service Definition ==========
+service RTCService {
+  // Room Management
+  rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
+  rpc DeleteRoom(DeleteRoomRequest) returns (DeleteRoomResponse);
+  rpc ListActiveRooms(ListActiveRoomsRequest) returns (ListActiveRoomsResponse);
+
+  // Token Generation
+  rpc GenerateToken(GenerateTokenRequest) returns (GenerateTokenResponse);
+
+  // Call Management
+  rpc StartCall(StartCallRequest) returns (StartCallResponse);
+  rpc EndCall(EndCallRequest) returns (EndCallResponse);
+  rpc GetCallStatus(GetCallStatusRequest) returns (GetCallStatusResponse);
+
+  // Call History
+  rpc GetCallHistory(GetCallHistoryRequest) returns (GetCallHistoryResponse);
+  rpc GetCallDetails(GetCallDetailsRequest) returns (GetCallDetailsResponse);
+
+  // Participant Management
+  rpc GetRoomParticipants(GetRoomParticipantsRequest) returns (GetRoomParticipantsResponse);
+  rpc KickParticipant(KickParticipantRequest) returns (KickParticipantResponse);
+}
+
+// ========== Enumerations ==========
+
+enum CallType {
+  AUDIO = 0;
+  VIDEO = 1;
+}
+
+enum CallStatus {
+  INITIATING = 0;   // Call is being initiated
+  RINGING = 1;      // Ringing
+  CONNECTED = 2;    // In call
+  ENDED = 3;        // Call ended
+  FAILED = 4;       // Call failed
+  REJECTED = 5;     // Call rejected
+  NO_ANSWER = 6;    // No answer
+}
+
+enum CallEndReason {
+  NORMAL = 0;           // Normal hangup
+  REJECTED = 1;         // Rejected by callee
+  NO_ANSWER = 2;        // No answer timeout
+  BUSY = 3;             // User busy
+  CANCELLED = 4;        // Cancelled by caller
+  NETWORK_ERROR = 5;    // Network error
+  KICKED = 6;           // Kicked by moderator
+}
+
+enum ParticipantRole {
+  CALLER = 0;     // Call initiator
+  CALLEE = 1;     // Call receiver
+  JOINED = 2;     // Joined mid-call
+}
+
+// ========== Room Management Messages ==========
+
+message CreateRoomRequest {
+  string conversation_id = 1;
+  repeated string participant_ids = 2;
+  CallType call_type = 3;
+  int32 max_participants = 4;  // Default: 20
+}
+
+message CreateRoomResponse {
+  bool success = 1;
+  string room_id = 2;
+  string room_name = 3;
+  string call_id = 4;
+  string message = 5;
+}
+
+message DeleteRoomRequest {
+  string room_name = 1;
+}
+
+message DeleteRoomResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListActiveRoomsRequest {
+  optional int32 limit = 1;
+  optional int32 offset = 2;
+}
+
+message ListActiveRoomsResponse {
+  repeated RoomInfo rooms = 1;
+  int32 total_count = 2;
+}
+
+message RoomInfo {
+  string name = 1;
+  string sid = 2;
+  int32 num_participants = 3;
+  int64 creation_time = 4;
+  int32 max_participants = 5;
+}
+
+// ========== Token Generation Messages ==========
+
+message GenerateTokenRequest {
+  string room_name = 1;
+  string user_id = 2;
+  string username = 3;
+  optional TokenPermissions permissions = 4;
+}
+
+message TokenPermissions {
+  bool can_publish = 1;        // Can publish audio/video
+  bool can_subscribe = 2;      // Can subscribe to audio/video
+  bool can_publish_data = 3;   // Can publish data
+  bool hidden = 4;             // Hidden participant
+}
+
+message GenerateTokenResponse {
+  bool success = 1;
+  string token = 2;
+  string livekit_url = 3;
+  int64 expires_at = 4;  // Unix timestamp
+  string message = 5;
+}
+
+// ========== Call Management Messages ==========
+
+message StartCallRequest {
+  string conversation_id = 1;
+  string caller_id = 2;
+  repeated string callee_ids = 3;
+  CallType call_type = 4;
+}
+
+message StartCallResponse {
+  bool success = 1;
+  string call_id = 2;
+  string room_name = 3;
+  string message = 4;
+}
+
+message EndCallRequest {
+  string call_id = 1;
+  string user_id = 2;
+  optional int32 duration_seconds = 3;
+  optional CallEndReason end_reason = 4;
+}
+
+message EndCallResponse {
+  bool success = 1;
+  string message = 2;
+  CallRecord call_record = 3;
+}
+
+message GetCallStatusRequest {
+  string call_id = 1;
+}
+
+message GetCallStatusResponse {
+  bool active = 1;
+  CallStatus status = 2;
+  int32 participant_count = 3;
+  int64 started_at = 4;
+  optional int32 duration_seconds = 5;
+  string room_name = 6;
+}
+
+// ========== Call History Messages ==========
+
+message GetCallHistoryRequest {
+  string user_id = 1;
+  optional string conversation_id = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message GetCallHistoryResponse {
+  repeated CallRecord calls = 1;
+  int32 total_count = 2;
+}
+
+message GetCallDetailsRequest {
+  string call_id = 1;
+}
+
+message GetCallDetailsResponse {
+  bool success = 1;
+  CallRecord call = 2;
+  string message = 3;
+}
+
+// ========== Participant Management Messages ==========
+
+message GetRoomParticipantsRequest {
+  string room_name = 1;
+}
+
+message GetRoomParticipantsResponse {
+  repeated ParticipantInfo participants = 1;
+  int32 count = 2;
+}
+
+message ParticipantInfo {
+  string identity = 1;
+  string name = 2;
+  string sid = 3;
+  bool is_publisher = 4;
+  int64 joined_at = 5;
+  optional string metadata = 6;
+}
+
+message KickParticipantRequest {
+  string room_name = 1;
+  string participant_identity = 2;
+  string operator_id = 3;
+}
+
+message KickParticipantResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ========== Data Structures ==========
+
+message CallRecord {
+  string id = 1;
+  string conversation_id = 2;
+  string room_name = 3;
+  CallType call_type = 4;
+  CallStatus status = 5;
+  repeated CallParticipant participants = 6;
+  int64 started_at = 7;
+  optional int64 ended_at = 8;
+  optional int32 duration_seconds = 9;
+  optional CallEndReason end_reason = 10;
+  string initiated_by = 11;
+  int64 created_at = 12;
+  int64 updated_at = 13;
+}
+
+message CallParticipant {
+  string user_id = 1;
+  string username = 2;
+  int64 joined_at = 3;
+  optional int64 left_at = 4;
+  optional int32 duration_seconds = 5;
+  ParticipantRole role = 6;
+}

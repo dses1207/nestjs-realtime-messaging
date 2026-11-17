@@ -1,0 +1,399 @@
+services:
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    entrypoint: ["/scripts/mongodb-entrypoint.sh"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGODB_DB}
+    ports:
+      - "${MONGODB_EXTERNAL_PORT:-27017}:27017"
+    volumes:
+      - mongodb_dev_data:/data/db
+      - ./keys:/etc/mongodb-keys:ro
+      - ./scripts/mongodb-entrypoint.sh:/scripts/mongodb-entrypoint.sh:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: |
+        mongosh --quiet --eval "db.adminCommand('ping').ok" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mongodb-init:
+    image: mongo:8.0
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: "no"
+    command: >
+      mongosh mongodb://mongodb:27017/admin
+      --username ${MONGODB_USERNAME}
+      --password ${MONGODB_PASSWORD}
+      --eval "
+        try {
+          const status = rs.status();
+          print('Replica set already initialized');
+        } catch(e) {
+          if (e.codeName === 'NotYetInitialized') {
+            rs.initiate({
+              _id: 'rs0',
+              members: [{ _id: 0, host: 'mongodb:27017' }]
+            });
+            print('Replica set initialized successfully');
+          } else {
+            print('Error: ' + e);
+            quit(1);
+          }
+        }
+      "
+
+  minio:
+    # MinIO 官方已不在 Docker Hub、quay.io 發佈映像，改用 Chainguard 的建置（免費版只提供 latest）
+    image: cgr.dev/chainguard/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    ports:
+      # 左邊是本機 port（撞到就改 .env.dev 的 *_EXTERNAL_PORT），右邊是容器內固定的 port
+      - "${MINIO_EXTERNAL_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_EXTERNAL_PORT:-9001}:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_dev_data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]   # MinIO 映像裡沒有 curl
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  user-service:
+    build:
+      context: ./services/user-service
+    expose:
+      - "${USER_SERVICE_PORT}"
+    volumes:
+      - ./services/user-service:/app
+      - /app/node_modules
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./services/protos:/app/protos
+    command: >
+      sh -c "
+      export MONGODB_URI='mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DB}?authSource=${MONGODB_AUTH_SOURCE}&replicaSet=rs0';
+      exec pnpm run start:dev
+      "
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - MONGODB_HOST=${MONGODB_HOST}
+      - MONGODB_PORT=${MONGODB_PORT}
+      - MONGODB_DB=${MONGODB_DB}
+      - MONGODB_AUTH_SOURCE=${MONGODB_AUTH_SOURCE}
+      - JWT_SECRET=${JWT_SECRET}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+      - mongodb-init
+    networks:
+      - app-network
+    init: true
+
+  chat-service:
+    build:
+      context: ./services/chat-service
+    expose:
+      - "${CHAT_SERVICE_PORT}"
+    volumes:
+      - ./services/chat-service:/app
+      - /app/node_modules
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./services/protos:/app/protos
+    command: >
+      sh -c "
+      export MONGODB_URI='mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DB}?authSource=${MONGODB_AUTH_SOURCE}&replicaSet=rs0';
+      exec pnpm run start:dev
+      "
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - MONGODB_HOST=${MONGODB_HOST}
+      - MONGODB_PORT=${MONGODB_PORT}
+      - MONGODB_DB=${MONGODB_DB}
+      - MONGODB_AUTH_SOURCE=${MONGODB_AUTH_SOURCE}
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+      - mongodb-init
+      - notification-service
+    networks:
+      - app-network
+    init: true
+
+  file-service:
+    build:
+      context: ./services/file-service
+    expose:
+      - "${FILE_SERVICE_PORT}"
+    volumes:
+      - ./services/file-service:/app
+      - /app/node_modules
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./services/protos:/app/protos
+      - ./uploads:/app/uploads
+    command: >
+      sh -c "
+      export MONGODB_URI='mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DB}?authSource=${MONGODB_AUTH_SOURCE}&replicaSet=rs0';
+      exec pnpm run start:dev
+      "
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - MONGODB_HOST=${MONGODB_HOST}
+      - MONGODB_PORT=${MONGODB_PORT}
+      - MONGODB_DB=${MONGODB_DB}
+      - MONGODB_AUTH_SOURCE=${MONGODB_AUTH_SOURCE}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_USE_SSL=${MINIO_USE_SSL}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - MINIO_SERVER_URL=${MINIO_SERVER_URL}
+      - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+      - mongodb-init
+      - minio
+    networks:
+      - app-network
+    init: true
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+    expose:
+      - "${NOTIFICATION_SERVICE_PORT}"
+    volumes:
+      - ./services/notification-service:/app
+      - /app/node_modules
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./services/protos:/app/protos
+    command: >
+      sh -c "
+      export MONGODB_URI='mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DB}?authSource=${MONGODB_AUTH_SOURCE}&replicaSet=rs0';
+      exec pnpm run start:dev
+      "
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - MONGODB_HOST=${MONGODB_HOST}
+      - MONGODB_PORT=${MONGODB_PORT}
+      - MONGODB_DB=${MONGODB_DB}
+      - MONGODB_AUTH_SOURCE=${MONGODB_AUTH_SOURCE}
+      - FIREBASE_CONFIG_PATH=${FIREBASE_CONFIG_PATH}
+      - APNS_KEY_PATH=${APNS_KEY_PATH}
+      - APNS_KEY_ID=${APNS_KEY_ID}
+      - APNS_TEAM_ID=${APNS_TEAM_ID}
+      - APNS_BUNDLE_ID=${APNS_BUNDLE_ID}
+      - APNS_PRODUCTION=${APNS_PRODUCTION}
+      - APNS_DEFAULT_INTERRUPTION_LEVEL=${APNS_DEFAULT_INTERRUPTION_LEVEL}
+      - APNS_DEFAULT_RELEVANCE_SCORE=${APNS_DEFAULT_RELEVANCE_SCORE}
+      - APNS_ENABLE_MUTABLE_CONTENT=${APNS_ENABLE_MUTABLE_CONTENT}
+      - APNS_NOTIFICATION_EXPIRATION=${APNS_NOTIFICATION_EXPIRATION}
+      - APNS_VIP_INTERRUPTION_LEVEL=${APNS_VIP_INTERRUPTION_LEVEL}
+      - APNS_VIP_RELEVANCE_SCORE=${APNS_VIP_RELEVANCE_SCORE}
+      - APNS_GROUP_INTERRUPTION_LEVEL=${APNS_GROUP_INTERRUPTION_LEVEL}
+      - APNS_GROUP_RELEVANCE_SCORE=${APNS_GROUP_RELEVANCE_SCORE}
+      - NOTIFICATION_SERVICE_PORT=${NOTIFICATION_SERVICE_PORT}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+      - mongodb-init
+    networks:
+      - app-network
+    init: true
+
+  websocket-server:
+    build:
+      context: ./services/websocket-server
+    expose:
+      - "${WEBSOCKET_SERVICE_PORT}"
+    ports:
+      - "${WEBSOCKET_SERVICE_PORT}:${WEBSOCKET_SERVICE_PORT}"
+    volumes:
+      - ./services/websocket-server:/app
+      - /app/node_modules
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./services/protos:/app/protos
+    command: pnpm run start:dev
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - CHAT_SERVICE_URL=chat-service:${CHAT_SERVICE_PORT}
+      - CHAT_SERVICE_PORT=${CHAT_SERVICE_PORT}
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
+      - RTC_SERVICE_URL=${RTC_SERVICE_URL}
+      - RTC_SERVICE_PORT=${RTC_SERVICE_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - TZ=${TZ}
+    depends_on:
+      - chat-service
+      - notification-service
+      - rtc-service
+    networks:
+      - app-network
+    init: true
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    ports:
+      - "${API_GATEWAY_PORT}:3000"
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./services/protos:/app/protos
+    command: pnpm run start:dev
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - USER_SERVICE_URL=${USER_SERVICE_URL}
+      - CHAT_SERVICE_URL=${CHAT_SERVICE_URL}
+      - FILE_SERVICE_URL=${FILE_SERVICE_URL}
+      - WEBSOCKET_SERVICE_URL=${WEBSOCKET_SERVICE_URL}
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
+      - RTC_SERVICE_URL=${RTC_SERVICE_URL}
+      - USER_SERVICE_PORT=${USER_SERVICE_PORT}
+      - CHAT_SERVICE_PORT=${CHAT_SERVICE_PORT}
+      - FILE_SERVICE_PORT=${FILE_SERVICE_PORT}
+      - NOTIFICATION_SERVICE_PORT=${NOTIFICATION_SERVICE_PORT}
+      - RTC_SERVICE_PORT=${RTC_SERVICE_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - TZ=${TZ}
+    depends_on:
+      - user-service
+      - chat-service
+      - file-service
+      - websocket-server
+      - notification-service
+
+      - rtc-service
+    networks:
+      - app-network
+    init: true
+
+  livekit-server:
+    image: livekit/livekit-server:v1.13.10
+    container_name: livekit-server
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+    environment:
+      - "LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7880/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    init: true
+
+  coturn:
+    image: coturn/coturn:4.18.0
+    container_name: coturn
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/tcp"
+      # relay port 範圍刻意縮小：對應上萬個 port 會讓 Docker 啟動極慢又吃記憶體
+      # 要改範圍時，config/turnserver.conf 的 min-port / max-port 要一起改
+      - "49160-49200:49160-49200/udp"
+    volumes:
+      - ./config/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    init: true
+
+  rtc-service:
+    build:
+      context: ./services/rtc-service
+    expose:
+      - "${RTC_SERVICE_PORT}"
+    volumes:
+      - ./services/rtc-service:/app
+      - /app/node_modules
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./services/protos:/app/protos
+    command: >
+      sh -c "
+      export MONGODB_URI='mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DB}?authSource=${MONGODB_AUTH_SOURCE}&replicaSet=rs0';
+      exec pnpm run start:dev
+      "
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - RTC_SERVICE_PORT=${RTC_SERVICE_PORT}
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - MONGODB_HOST=${MONGODB_HOST}
+      - MONGODB_PORT=${MONGODB_PORT}
+      - MONGODB_DB=${MONGODB_DB}
+      - MONGODB_AUTH_SOURCE=${MONGODB_AUTH_SOURCE}
+      - LIVEKIT_HOST=${LIVEKIT_HOST}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - CHAT_SERVICE_URL=${CHAT_SERVICE_URL}
+      - CHAT_SERVICE_PORT=${CHAT_SERVICE_PORT}
+      - USER_SERVICE_URL=${USER_SERVICE_URL}
+      - USER_SERVICE_PORT=${USER_SERVICE_PORT}
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
+      - NOTIFICATION_SERVICE_PORT=${NOTIFICATION_SERVICE_PORT}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+      - mongodb-init
+      - livekit-server
+      - chat-service
+      - user-service
+      - notification-service
+    networks:
+      - app-network
+    init: true
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongodb_dev_data:
+    driver: local
+  minio_dev_data:
+    driver: local

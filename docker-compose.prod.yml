@@ -1,0 +1,246 @@
+services:
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGODB_DB}
+    ports:
+      - "${MONGODB_PORT}:27017"
+    volumes:
+      - mongodb_prod_data:/data/db
+    networks:
+      - app-network
+
+  minio:
+    # MinIO 官方已不在 Docker Hub、quay.io 發佈映像，改用 Chainguard 的建置（免費版只提供 latest）
+    image: cgr.dev/chainguard/minio:latest
+    container_name: minio
+    command: server /data --console-address ":${MINIO_CONSOLE_PORT}"
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_prod_data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]   # MinIO 映像裡沒有 curl
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    init: true
+
+  user-service:
+    build:
+      context: ./services
+      dockerfile: ./user-service/Dockerfile.prod
+    expose:
+      - "${USER_SERVICE_PORT}"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
+    init: true
+
+  chat-service:
+    build:
+      context: ./services
+      dockerfile: ./chat-service/Dockerfile.prod
+    expose:
+      - "${CHAT_SERVICE_PORT}"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+      - notification-service
+    networks:
+      - app-network
+    init: true
+
+  file-service:
+    build:
+      context: ./services
+      dockerfile: ./file-service/Dockerfile.prod
+    expose:
+      - "${FILE_SERVICE_PORT}"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_USE_SSL=${MINIO_USE_SSL}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - MINIO_SERVER_URL=${MINIO_SERVER_URL}
+      - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+      - minio
+    networks:
+      - app-network
+    init: true
+
+  notification-service:
+    build:
+      context: ./services
+      dockerfile: ./notification-service/Dockerfile.prod
+    expose:
+      - "${NOTIFICATION_SERVICE_PORT}"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - FIREBASE_CONFIG_PATH=${FIREBASE_CONFIG_PATH}
+      - APNS_KEY_PATH=${APNS_KEY_PATH}
+      - APNS_KEY_ID=${APNS_KEY_ID}
+      - APNS_TEAM_ID=${APNS_TEAM_ID}
+      - APNS_BUNDLE_ID=${APNS_BUNDLE_ID}
+      - APNS_PRODUCTION=${APNS_PRODUCTION}
+      - NOTIFICATION_SERVICE_PORT=${NOTIFICATION_SERVICE_PORT}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
+    init: true
+
+  websocket-server:
+    build:
+      context: ./services
+      dockerfile: ./websocket-server/Dockerfile.prod
+    ports:
+      - "${WEBSOCKET_SERVICE_PORT}:${WEBSOCKET_SERVICE_PORT}"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CHAT_SERVICE_URL=${CHAT_SERVICE_URL}
+      - CHAT_SERVICE_PORT=${CHAT_SERVICE_PORT}
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
+      - RTC_SERVICE_URL=${RTC_SERVICE_URL}
+      - RTC_SERVICE_PORT=${RTC_SERVICE_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - TZ=${TZ}
+    depends_on:
+      - chat-service
+      - notification-service
+      - rtc-service
+    networks:
+      - app-network
+    init: true
+
+  livekit-server:
+    image: livekit/livekit-server:v1.13.10
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+    environment:
+      - "LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7880/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    init: true
+
+  rtc-service:
+    build:
+      context: ./services
+      dockerfile: ./rtc-service/Dockerfile.prod
+    expose:
+      - "${RTC_SERVICE_PORT}"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - RTC_SERVICE_PORT=${RTC_SERVICE_PORT}
+      - MONGODB_URI=${MONGODB_URI}
+      - LIVEKIT_HOST=${LIVEKIT_HOST}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - CHAT_SERVICE_URL=${CHAT_SERVICE_URL}
+      - CHAT_SERVICE_PORT=${CHAT_SERVICE_PORT}
+      - USER_SERVICE_URL=${USER_SERVICE_URL}
+      - USER_SERVICE_PORT=${USER_SERVICE_PORT}
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
+      - NOTIFICATION_SERVICE_PORT=${NOTIFICATION_SERVICE_PORT}
+      - TZ=${TZ}
+      - GRPC_ONLY=${GRPC_ONLY}
+    depends_on:
+      - mongodb
+      - livekit-server
+      - chat-service
+      - user-service
+      - notification-service
+    networks:
+      - app-network
+    init: true
+
+  api-gateway:
+    build:
+      context: ./services
+      dockerfile: ./api-gateway/Dockerfile.prod
+    ports:
+      - "${API_GATEWAY_PORT}:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - USER_SERVICE_URL=${USER_SERVICE_URL}
+      - CHAT_SERVICE_URL=${CHAT_SERVICE_URL}
+      - FILE_SERVICE_URL=${FILE_SERVICE_URL}
+      - WEBSOCKET_SERVICE_URL=${WEBSOCKET_SERVICE_URL}
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
+      - RTC_SERVICE_URL=${RTC_SERVICE_URL}
+      - USER_SERVICE_PORT=${USER_SERVICE_PORT}
+      - CHAT_SERVICE_PORT=${CHAT_SERVICE_PORT}
+      - FILE_SERVICE_PORT=${FILE_SERVICE_PORT}
+      - NOTIFICATION_SERVICE_PORT=${NOTIFICATION_SERVICE_PORT}
+      - RTC_SERVICE_PORT=${RTC_SERVICE_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - TZ=${TZ}
+    depends_on:
+      - user-service
+      - chat-service
+      - file-service
+      - websocket-server
+      - notification-service
+
+      - rtc-service
+    networks:
+      - app-network
+    init: true
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongodb_prod_data:
+    driver: local
+  minio_prod_data:
+    driver: local

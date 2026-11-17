@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package chat;
+
+service ChatService {
+  rpc GetUserConversations(GetUserConversationsRequest) returns (GetUserConversationsResponse);
+  rpc GetConversationMessages(GetConversationMessagesRequest) returns (GetConversationMessagesResponse);
+  rpc SaveMessage(SaveMessageRequest) returns (SaveMessageResponse);
+  rpc GetConversationParticipants(GetConversationParticipantsRequest) returns (GetConversationParticipantsResponse);
+  rpc GetConversationDetails(GetConversationDetailsRequest) returns (GetConversationDetailsResponse);
+  rpc CreateChatRoom(CreateChatRoomRequest) returns (CreateChatRoomResponse);
+
+  // 檔案權限檢查
+  rpc CheckUserInConversation(CheckUserInConversationRequest) returns (CheckUserInConversationResponse);
+
+  // 已讀系統
+  rpc MarkMessagesAsRead(MarkMessagesAsReadRequest) returns (MarkMessagesAsReadResponse);
+  rpc GetReadReceipts(GetReadReceiptsRequest) returns (GetReadReceiptsResponse);
+  rpc GetConversationState(GetConversationStateRequest) returns (GetConversationStateResponse);
+}
+
+message GetUserConversationsRequest {
+  string userId = 1;
+}
+
+message GetUserConversationsResponse {
+  repeated Conversation conversations = 1;
+}
+
+message GetConversationMessagesRequest {
+  string conversationId = 1;
+  string userId = 2;
+  int32 limit = 3;
+  string before = 4;
+  string after = 5;
+}
+
+message GetConversationMessagesResponse {
+  repeated Message messages = 1;
+}
+
+message SaveMessageRequest {
+  string content = 1;
+  string conversationId = 2;
+  string senderId = 3;
+  string messageType = 4;
+  optional string fileId = 5;
+  optional FileInfo fileInfo = 6;
+}
+
+message SaveMessageResponse {
+  Message message = 1;
+}
+
+message Conversation {
+  string id = 1;
+  string name = 2;
+  string type = 3;
+  repeated Participant participants = 4;
+  optional LastMessage lastMessage = 5;
+  string lastMessageAt = 6;
+  string createdAt = 7;
+  string updatedAt = 8;
+  string groupPicture = 9;
+  optional int32 unreadCount = 10;
+  optional string lastReadMessageId = 11;
+}
+
+message Participant {
+  string id = 1;
+  string username = 2;
+  string profilePicture = 3;
+}
+
+message LastMessage {
+  string content = 1;
+  string timestamp = 2;
+  string senderName = 3;
+}
+
+message Message {
+  string id = 1;
+  string content = 2;
+  string conversationId = 3;
+  string senderId = 4;
+  string senderName = 5;
+  string senderProfilePicture = 6;
+  string timestamp = 7;
+  string messageType = 8;
+  optional FileInfo fileInfo = 9;
+  int32 readCount = 10;
+}
+
+message FileInfo {
+  string fileId = 1;
+  string originalName = 2;
+  int64 fileSize = 3;
+  string contentType = 4;
+  string downloadUrl = 5;
+  optional string previewUrl = 6;
+}
+
+message GetConversationParticipantsRequest {
+  string conversationId = 1;
+}
+
+message GetConversationParticipantsResponse {
+  repeated string participantIds = 1;
+}
+
+message GetConversationDetailsRequest {
+  string conversationId = 1;
+}
+
+message GetConversationDetailsResponse {
+  Conversation conversation = 1;
+}
+
+message CreateChatRoomRequest {
+  repeated string memberIds = 1;
+  optional string name = 2;
+  string createdBy = 3;
+}
+
+message CreateChatRoomResponse {
+  Conversation conversation = 1;
+}
+
+// 檢查用戶是否在對話中
+message CheckUserInConversationRequest {
+  string userId = 1;
+  string conversationId = 2;
+}
+
+message CheckUserInConversationResponse {
+  bool success = 1;
+  bool hasAccess = 2;
+  string message = 3;
+}
+
+// ========== 已讀系統 ==========
+
+// 標記訊息為已讀
+message MarkMessagesAsReadRequest {
+  string userId = 1;
+  string conversationId = 2;
+  string lastReadMessageId = 3;
+}
+
+message MarkMessagesAsReadResponse {
+  bool success = 1;
+  repeated string affectedMessageIds = 2;
+  int32 newlyReadCount = 3;
+}
+
+// 查詢已讀列表
+message GetReadReceiptsRequest {
+  string messageId = 1;
+  optional int32 limit = 2;
+  optional int32 offset = 3;
+}
+
+message ReadReceipt {
+  string userId = 1;
+  string username = 2;
+  string profilePicture = 3;
+  string readAt = 4;
+}
+
+message GetReadReceiptsResponse {
+  repeated ReadReceipt receipts = 1;
+  int32 totalCount = 2;
+}
+
+// 查詢對話狀態
+message GetConversationStateRequest {
+  string userId = 1;
+  string conversationId = 2;
+}
+
+message GetConversationStateResponse {
+  int32 unreadCount = 1;
+  string lastReadMessageId = 2;
+  string lastReadAt = 3;
+} 

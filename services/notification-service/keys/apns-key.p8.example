@@ -1,0 +1,9 @@
+-----BEGIN PRIVATE KEY-----
+<Your Apple Push Notification Service (APNs) authentication key here>
+-----END PRIVATE KEY-----
+
+# How to obtain:
+# 1. Go to Apple Developer > Certificates, Identifiers & Profiles > Keys
+# 2. Create a new key with "Apple Push Notifications service (APNs)" enabled
+# 3. Download the .p8 file
+# 4. Copy it to this directory as "apns-key.p8"

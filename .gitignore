@@ -1,0 +1,93 @@
+# Environment files
+.env
+.env.*
+!env.*.example
+
+# Node.js
+node_modules/
+**/node_modules/
+npm-debug.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+
+# Build output
+**/dist/
+build/
+out/
+.next/
+
+# Cache
+.cache/
+**/.pnpm-store/
+.npm/
+.yarn/
+.pnpm/
+
+# Logs
+*.log
+logs/
+
+# Runtime
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# TypeScript
+*.tsbuildinfo
+
+# ESLint / Prettier
+.eslintcache
+.prettiercache
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Keys and secrets
+**/keys/*.p8
+**/keys/*.json
+keys/mongodb-keyfile
+
+# Project-specific
+.cursor/
+.claude/
+CLAUDE.md
+.specstory/
+uploads/*
+!uploads/.gitkeep
+
+# SSL
+*.pem
+*.key
+*.crt
+*.cert
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/
+mongodb-data/

@@ -1,0 +1,3 @@
+# MongoDB Replica Set Keyfile
+# Generate with: openssl rand -base64 756 > keys/mongodb-keyfile
+# Then set permissions: chmod 400 keys/mongodb-keyfile

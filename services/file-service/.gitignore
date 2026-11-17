@@ -1,0 +1,23 @@
+# Build output
+dist/
+build/
+
+# Node modules
+node_modules/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.dev
+.env.prod
+
+# Logs
+*.log
+logs/
+
+# Cache
+.eslintcache
+.prettiercache

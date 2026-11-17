@@ -1,0 +1,334 @@
+syntax = "proto3";
+
+package chat;
+
+service ChatService {
+  rpc GetUserConversations(GetUserConversationsRequest) returns (GetUserConversationsResponse);
+  rpc GetConversationMessages(GetConversationMessagesRequest) returns (GetConversationMessagesResponse);
+  rpc SaveMessage(SaveMessageRequest) returns (SaveMessageResponse);
+  rpc GetConversationParticipants(GetConversationParticipantsRequest) returns (GetConversationParticipantsResponse);
+  rpc GetConversationDetails(GetConversationDetailsRequest) returns (GetConversationDetailsResponse);
+  rpc CreateChatRoom(CreateChatRoomRequest) returns (CreateChatRoomResponse);
+
+  // 檔案權限檢查
+  rpc CheckUserInConversation(CheckUserInConversationRequest) returns (CheckUserInConversationResponse);
+
+  // 已讀系統
+  rpc MarkMessagesAsRead(MarkMessagesAsReadRequest) returns (MarkMessagesAsReadResponse);
+  rpc GetReadReceipts(GetReadReceiptsRequest) returns (GetReadReceiptsResponse);
+  rpc GetConversationState(GetConversationStateRequest) returns (GetConversationStateResponse);
+
+  // 系統訊息權限管理
+  rpc CheckSystemMessagePermission(CheckSystemMessagePermissionRequest) returns (CheckSystemMessagePermissionResponse);
+  rpc GrantSystemMessagePermission(GrantSystemMessagePermissionRequest) returns (GrantSystemMessagePermissionResponse);
+  rpc RevokeSystemMessagePermission(RevokeSystemMessagePermissionRequest) returns (RevokeSystemMessagePermissionResponse);
+  rpc ListSystemMessagePermissions(ListSystemMessagePermissionsRequest) returns (ListSystemMessagePermissionsResponse);
+
+  // 系統訊息對話管理
+  rpc GetOrCreatePrivateConversation(GetOrCreatePrivateConversationRequest) returns (GetOrCreatePrivateConversationResponse);
+  rpc AddUserToConversation(AddUserToConversationRequest) returns (AddUserToConversationResponse);
+
+  // ========== 聊天室管理 ==========
+  rpc RemoveUserFromConversation(RemoveUserFromConversationRequest) returns (RemoveUserFromConversationResponse);
+  rpc AddUsersToConversation(AddUsersToConversationRequest) returns (AddUsersToConversationResponse);
+  rpc DeleteConversation(DeleteConversationRequest) returns (DeleteConversationResponse);
+  rpc UpdateConversationName(UpdateConversationNameRequest) returns (UpdateConversationNameResponse);
+}
+
+message GetUserConversationsRequest {
+  string userId = 1;
+}
+
+message GetUserConversationsResponse {
+  repeated Conversation conversations = 1;
+}
+
+message GetConversationMessagesRequest {
+  string conversationId = 1;
+  string userId = 2;
+  int32 limit = 3;
+  string before = 4;
+  string after = 5;
+}
+
+message GetConversationMessagesResponse {
+  repeated Message messages = 1;
+}
+
+message SaveMessageRequest {
+  string content = 1;
+  string conversationId = 2;
+  string senderId = 3;
+  string messageType = 4;  // 訊息類型: 'text', 'file', 'image', 'document', 'video'
+  optional string fileId = 5;
+  optional FileInfo fileInfo = 6;
+}
+
+message SaveMessageResponse {
+  Message message = 1;
+}
+
+message Conversation {
+  string id = 1;
+  string name = 2;
+  string type = 3;
+  repeated Participant participants = 4;
+  optional LastMessage lastMessage = 5;
+  string lastMessageAt = 6;
+  string createdAt = 7;
+  string updatedAt = 8;
+  string groupPicture = 9;
+  optional int32 unreadCount = 10;
+  optional string lastReadMessageId = 11;
+}
+
+message Participant {
+  string id = 1;
+  string username = 2;
+  string profilePicture = 3;
+}
+
+message LastMessage {
+  string content = 1;
+  string timestamp = 2;
+  string senderName = 3;
+}
+
+message Message {
+  string id = 1;
+  string content = 2;
+  string conversationId = 3;
+  string senderId = 4;
+  string senderName = 5;
+  string senderProfilePicture = 6;
+  string timestamp = 7;
+  string messageType = 8;  // 訊息類型: 'text', 'file', 'image', 'document', 'video'
+  optional FileInfo fileInfo = 9;
+  int32 readCount = 10;
+}
+
+message FileInfo {
+  string fileId = 1;
+  string originalName = 2;
+  int64 fileSize = 3;
+  string contentType = 4;
+  string downloadUrl = 5;
+  optional string previewUrl = 6;
+}
+
+message GetConversationParticipantsRequest {
+  string conversationId = 1;
+}
+
+message GetConversationParticipantsResponse {
+  repeated string participantIds = 1;
+}
+
+message GetConversationDetailsRequest {
+  string conversationId = 1;
+}
+
+message GetConversationDetailsResponse {
+  Conversation conversation = 1;
+}
+
+message CreateChatRoomRequest {
+  repeated string memberIds = 1;
+  optional string name = 2;
+  string createdBy = 3;
+}
+
+message CreateChatRoomResponse {
+  Conversation conversation = 1;
+}
+
+// 檢查用戶是否在對話中
+message CheckUserInConversationRequest {
+  string userId = 1;
+  string conversationId = 2;
+}
+
+message CheckUserInConversationResponse {
+  bool success = 1;
+  bool hasAccess = 2;
+  string message = 3;
+}
+
+// ========== 已讀系統 ==========
+
+// 標記訊息為已讀
+message MarkMessagesAsReadRequest {
+  string userId = 1;
+  string conversationId = 2;
+  string lastReadMessageId = 3;
+}
+
+message MarkMessagesAsReadResponse {
+  bool success = 1;
+  repeated string affectedMessageIds = 2;
+  int32 newlyReadCount = 3;
+}
+
+// 查詢已讀列表
+message GetReadReceiptsRequest {
+  string messageId = 1;
+  optional int32 limit = 2;
+  optional int32 offset = 3;
+}
+
+message ReadReceipt {
+  string userId = 1;
+  string username = 2;
+  string profilePicture = 3;
+  string readAt = 4;
+}
+
+message GetReadReceiptsResponse {
+  repeated ReadReceipt receipts = 1;
+  int32 totalCount = 2;
+}
+
+// 查詢對話狀態
+message GetConversationStateRequest {
+  string userId = 1;
+  string conversationId = 2;
+}
+
+message GetConversationStateResponse {
+  int32 unreadCount = 1;
+  string lastReadMessageId = 2;
+  string lastReadAt = 3;
+}
+
+// ========== 系統訊息權限管理 ==========
+
+// 檢查系統訊息權限
+message CheckSystemMessagePermissionRequest {
+  string userId = 1;
+}
+
+message CheckSystemMessagePermissionResponse {
+  bool hasPermission = 1;
+  string username = 2;
+  string description = 3;
+}
+
+// 授予系統訊息權限
+message GrantSystemMessagePermissionRequest {
+  string userId = 1;
+  string username = 2;
+  string grantedBy = 3;
+}
+
+message GrantSystemMessagePermissionResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 撤銷系統訊息權限
+message RevokeSystemMessagePermissionRequest {
+  string userId = 1;
+}
+
+message RevokeSystemMessagePermissionResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 列出所有權限使用者
+message ListSystemMessagePermissionsRequest {
+  optional bool activeOnly = 1;
+}
+
+message SystemMessagePermission {
+  string userId = 1;
+  string username = 2;
+  bool isActive = 3;
+  string grantedBy = 4;
+  string grantedAt = 5;
+}
+
+message ListSystemMessagePermissionsResponse {
+  repeated SystemMessagePermission permissions = 1;
+  int32 totalCount = 2;
+}
+
+// ========== 系統訊息對話管理 ==========
+
+// 取得或建立私人對話
+message GetOrCreatePrivateConversationRequest {
+  string userId1 = 1;
+  string userId2 = 2;
+}
+
+message GetOrCreatePrivateConversationResponse {
+  string conversationId = 1;
+  bool isNewConversation = 2;
+  Conversation conversation = 3;
+}
+
+// 將使用者加入對話（群組）
+message AddUserToConversationRequest {
+  string userId = 1;
+  string conversationId = 2;
+}
+
+message AddUserToConversationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ========== 聊天室管理訊息定義 ==========
+
+// 移除成員
+message RemoveUserFromConversationRequest {
+  string conversationId = 1;
+  string userIdToRemove = 2;
+  string operatorId = 3;
+}
+
+message RemoveUserFromConversationResponse {
+  bool success = 1;
+  string message = 2;
+  string removedUserId = 3;
+  bool conversationDeleted = 4;  // 如果是最後一個成員退出，聊天室被刪除
+}
+
+// 批次新增成員
+message AddUsersToConversationRequest {
+  string conversationId = 1;
+  repeated string userIds = 2;
+  string operatorId = 3;
+}
+
+message AddUsersToConversationResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string addedUserIds = 3;
+  int32 addedCount = 4;
+}
+
+// 刪除聊天室（軟刪除）
+message DeleteConversationRequest {
+  string conversationId = 1;
+  string operatorId = 2;
+}
+
+message DeleteConversationResponse {
+  bool success = 1;
+  string message = 2;
+  string deletedAt = 3;
+}
+
+// 更改聊天室名稱
+message UpdateConversationNameRequest {
+  string conversationId = 1;
+  string name = 2;
+  string operatorId = 3;
+}
+
+message UpdateConversationNameResponse {
+  bool success = 1;
+  string message = 2;
+  string newName = 3;
+} 
